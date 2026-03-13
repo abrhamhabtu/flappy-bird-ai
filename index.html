@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Flappy Bird RL</title>
+    <script type="module" src="/src/main.js"></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <section class="panel">
+        <div class="panel__top">
+          <div>
+            <p class="eyebrow">Real-time agent training</p>
+            <h1>Flappy Bird Clone</h1>
+          </div>
+          <label class="mode-toggle" for="mode-switch">
+            <span>Player</span>
+            <input id="mode-switch" type="checkbox" />
+            <span class="mode-toggle__track"></span>
+            <span>AI</span>
+          </label>
+        </div>
+
+        <div class="controls-grid">
+          <div class="card">
+            <p class="card__label">Mode</p>
+            <p id="mode-label" class="card__value">Player</p>
+            <p class="card__hint">Press space, click, or tap to flap.</p>
+          </div>
+
+          <div class="card">
+            <div class="slider-row">
+              <div>
+                <p class="card__label">Model scale</p>
+                <p id="parameter-label" class="card__value">64 params</p>
+              </div>
+              <span id="network-shape" class="pill">6 → 4 → 1</span>
+            </div>
+            <input id="parameter-slider" type="range" min="33" max="1000" step="1" value="64" />
+            <p class="card__hint">Scales the neural net from lightweight to a 1,000 parameter model.</p>
+          </div>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat">
+            <span>Generation</span>
+            <strong id="generation-stat">0</strong>
+          </div>
+          <div class="stat">
+            <span>Episode score</span>
+            <strong id="score-stat">0</strong>
+          </div>
+          <div class="stat">
+            <span>Best score</span>
+            <strong id="best-score-stat">0</strong>
+          </div>
+          <div class="stat">
+            <span>Reward</span>
+            <strong id="reward-stat">0.00</strong>
+          </div>
+          <div class="stat">
+            <span>Entropy</span>
+            <strong id="entropy-stat">0.00</strong>
+          </div>
+          <div class="stat">
+            <span>Learning rate</span>
+            <strong id="lr-stat">0.012</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="game-frame">
+        <canvas id="game-canvas" width="420" height="720" aria-label="Flappy Bird canvas"></canvas>
+        <div class="overlay">
+          <p id="overlay-title">Player mode</p>
+          <p id="overlay-text">Stay in the gap. Toggle AI mode to watch the agent train live.</p>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>
