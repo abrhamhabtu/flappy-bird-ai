@@ -48,12 +48,12 @@
             <strong id="generation-stat">0</strong>
           </div>
           <div class="stat">
-            <span>Episode score</span>
-            <strong id="score-stat">0</strong>
+            <span>Player score</span>
+            <strong id="player-score-stat">0</strong>
           </div>
           <div class="stat">
-            <span>Best score</span>
-            <strong id="best-score-stat">0</strong>
+            <span>AI live score</span>
+            <strong id="ai-score-stat">0</strong>
           </div>
           <div class="stat">
             <span>Reward</span>
@@ -67,6 +67,14 @@
             <span>Population</span>
             <strong id="lr-stat">0.012</strong>
           </div>
+          <div class="stat">
+            <span>Player best</span>
+            <strong id="player-best-score-stat">0</strong>
+          </div>
+          <div class="stat">
+            <span>AI best</span>
+            <strong id="ai-best-score-stat">0</strong>
+          </div>
         </div>
       </section>
 
@@ -74,10 +82,6 @@
         <div class="game-layout">
           <div class="viewport">
             <canvas id="game-canvas" width="420" height="720" aria-label="Flappy Bird canvas"></canvas>
-            <div class="overlay">
-              <p id="overlay-title">Player mode</p>
-              <p id="overlay-text">Stay in the gap. Toggle AI mode to watch the agent train live.</p>
-            </div>
           </div>
 
           <aside class="telemetry">
@@ -87,10 +91,11 @@
                 <div><dt>Mode</dt><dd id="telemetry-mode">Preview</dd></div>
                 <div><dt>Model</dt><dd id="telemetry-model">64 params</dd></div>
                 <div><dt>Generation</dt><dd id="telemetry-generation">0</dd></div>
-                <div><dt>Runs</dt><dd id="telemetry-runs">0</dd></div>
+                <div><dt>Episodes</dt><dd id="telemetry-runs">0</dd></div>
                 <div><dt>Eval avg</dt><dd id="telemetry-eval-avg">0.00</dd></div>
                 <div><dt>Best avg</dt><dd id="telemetry-best-avg">0.00</dd></div>
-                <div><dt>Best score</dt><dd id="telemetry-best-score">0</dd></div>
+                <div><dt>Last eval best</dt><dd id="telemetry-last-score">0</dd></div>
+                <div><dt>Best eval best</dt><dd id="telemetry-best-score">0</dd></div>
                 <div><dt>Warm start</dt><dd id="telemetry-warm-start">70%</dd></div>
                 <div><dt>Preview flap</dt><dd id="telemetry-preview-flap">0%</dd></div>
               </dl>

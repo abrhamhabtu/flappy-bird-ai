@@ -13,19 +13,20 @@ const ui = {
   parameterLabel: document.querySelector("#parameter-label"),
   networkShape: document.querySelector("#network-shape"),
   generation: document.querySelector("#generation-stat"),
-  score: document.querySelector("#score-stat"),
-  bestScore: document.querySelector("#best-score-stat"),
+  playerScore: document.querySelector("#player-score-stat"),
+  aiScore: document.querySelector("#ai-score-stat"),
+  playerBestScore: document.querySelector("#player-best-score-stat"),
+  aiBestScore: document.querySelector("#ai-best-score-stat"),
   reward: document.querySelector("#reward-stat"),
   entropy: document.querySelector("#entropy-stat"),
   learningRate: document.querySelector("#lr-stat"),
-  overlayTitle: document.querySelector("#overlay-title"),
-  overlayText: document.querySelector("#overlay-text"),
   telemetryMode: document.querySelector("#telemetry-mode"),
   telemetryModel: document.querySelector("#telemetry-model"),
   telemetryGeneration: document.querySelector("#telemetry-generation"),
   telemetryRuns: document.querySelector("#telemetry-runs"),
   telemetryEvalAvg: document.querySelector("#telemetry-eval-avg"),
   telemetryBestAvg: document.querySelector("#telemetry-best-avg"),
+  telemetryLastScore: document.querySelector("#telemetry-last-score"),
   telemetryBestScore: document.querySelector("#telemetry-best-score"),
   telemetryWarmStart: document.querySelector("#telemetry-warm-start"),
   telemetryPreviewFlap: document.querySelector("#telemetry-preview-flap"),
@@ -56,8 +57,9 @@ ctx.imageSmoothingEnabled = false;
 
 const appState = {
   mode: "player",
-  score: 0,
-  bestScore: 0,
+  aiPaused: false,
+  playerScore: 0,
+  playerBestScore: 0,
   generation: 0,
   reward: 0,
   entropy: 0,
@@ -94,48 +96,45 @@ class SoundEngine {
       return;
     }
 
-    const now = this.context.currentTime;
-    const oscillator = this.context.createOscillator();
-    const gain = this.context.createGain();
-    oscillator.connect(gain);
-    gain.connect(this.context.destination);
-
     if (type === "flap") {
-      oscillator.type = "triangle";
-      oscillator.frequency.setValueAtTime(620, now);
-      oscillator.frequency.exponentialRampToValueAtTime(360, now + 0.08);
-      gain.gain.setValueAtTime(0.0001, now);
-      gain.gain.exponentialRampToValueAtTime(0.03, now + 0.012);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.09);
-      oscillator.start(now);
-      oscillator.stop(now + 0.09);
+      this.playLayeredTone([
+        { type: "square", start: 720, end: 430, gain: 0.022, duration: 0.075 },
+      ]);
       return;
     }
 
     if (type === "score") {
-      oscillator.type = "sine";
-      oscillator.frequency.setValueAtTime(760, now);
-      oscillator.frequency.exponentialRampToValueAtTime(1080, now + 0.14);
-      gain.gain.setValueAtTime(0.0001, now);
-      gain.gain.exponentialRampToValueAtTime(0.05, now + 0.01);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
-      oscillator.start(now);
-      oscillator.stop(now + 0.16);
+      this.playLayeredTone([
+        { type: "square", start: 880, end: 1320, gain: 0.03, duration: 0.08 },
+      ]);
       return;
     }
 
-    oscillator.type = "sawtooth";
-    oscillator.frequency.setValueAtTime(210, now);
-    oscillator.frequency.exponentialRampToValueAtTime(90, now + 0.18);
-    gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(0.045, now + 0.01);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.2);
-    oscillator.start(now);
-    oscillator.stop(now + 0.2);
+    this.playLayeredTone([
+      { type: "triangle", start: 260, end: 110, gain: 0.035, duration: 0.18 },
+    ]);
   }
 
   setMuted(nextMuted) {
     this.muted = nextMuted;
+  }
+
+  playLayeredTone(layers) {
+    const now = this.context.currentTime;
+    for (const layer of layers) {
+      const oscillator = this.context.createOscillator();
+      const gain = this.context.createGain();
+      oscillator.type = layer.type;
+      oscillator.frequency.setValueAtTime(layer.start, now);
+      oscillator.frequency.exponentialRampToValueAtTime(layer.end, now + layer.duration);
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(layer.gain, now + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + layer.duration);
+      oscillator.connect(gain);
+      gain.connect(this.context.destination);
+      oscillator.start(now);
+      oscillator.stop(now + layer.duration);
+    }
   }
 }
 
@@ -576,6 +575,8 @@ class EvolutionTrainer {
     this.averageFitness = 0;
     this.evalAverage = 0;
     this.bestEvalAverage = 0;
+    this.lastScore = 0;
+    this.lastGenerationBestScore = 0;
     this.totalRuns = 0;
     this.evalHistory = [];
     this.actionConfidence = 0;
@@ -594,6 +595,8 @@ class EvolutionTrainer {
     this.averageFitness = 0;
     this.evalAverage = 0;
     this.bestEvalAverage = 0;
+    this.lastScore = 0;
+    this.lastGenerationBestScore = 0;
     this.totalRuns = 0;
     this.evalHistory = [];
     this.actionConfidence = 0;
@@ -670,6 +673,8 @@ class EvolutionTrainer {
       this.population.slice(0, this.eliteCount).reduce((sum, agent) => sum + agent.world.score, 0) /
       this.eliteCount;
     this.bestEvalAverage = Math.max(this.bestEvalAverage, this.evalAverage);
+    this.lastGenerationBestScore = generationBest.world.score;
+    this.lastScore = generationBest.world.score;
     this.evalHistory.push(this.evalAverage);
     if (this.evalHistory.length > 24) {
       this.evalHistory.shift();
@@ -754,18 +759,14 @@ const trainer = new EvolutionTrainer(Number(ui.parameterSlider.value));
 
 function setMode(mode) {
   appState.mode = mode;
+  appState.aiPaused = false;
   ui.playerModeButton.classList.toggle("is-active", mode === "player");
   ui.aiModeButton.classList.toggle("is-active", mode === "ai");
   ui.modeLabel.textContent = mode === "ai" ? "AI" : "Player";
   ui.modeHint.textContent =
     mode === "ai"
-      ? "Watch the current best agent play while the trainer evolves the next generations."
+      ? "Watch the current best agent play. Click the game area to pause or resume AI training."
       : "Press space, click, or tap to flap.";
-  ui.overlayTitle.textContent = mode === "ai" ? "AI training mode" : "Player mode";
-  ui.overlayText.textContent =
-    mode === "ai"
-      ? "A reward-driven evolutionary policy trains offscreen while the current champion plays live."
-      : "Space / click / tap to flap. Stay centered, clear the pipes, and restart fast on crash.";
   playerWorld.reset(5, false);
 }
 
@@ -776,6 +777,7 @@ function activeWorld() {
 function onPrimaryAction() {
   sound.unlock();
   if (appState.mode === "ai") {
+    appState.aiPaused = !appState.aiPaused;
     return;
   }
 
@@ -807,6 +809,9 @@ function updatePlayer() {
 }
 
 function updateAi() {
+  if (appState.aiPaused) {
+    return;
+  }
   trainer.updateTraining();
   trainer.updateDemo();
 }
@@ -1021,6 +1026,10 @@ function drawModeSpecificOverlay(world) {
     return;
   }
 
+  if (appState.aiPaused) {
+    drawBanner("PAUSED", "CLICK TO RESUME", 154);
+  }
+
   ctx.save();
   ctx.fillStyle = "rgba(0, 0, 0, 0.35)";
   ctx.fillRect(8, 8, 140, 50);
@@ -1034,15 +1043,13 @@ function drawModeSpecificOverlay(world) {
 
 function drawHintSprite() {
   ctx.save();
-  ctx.translate(GAME.width / 2, 256);
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(-8, 20, 16, 24);
-  ctx.fillRect(-14, 26, 28, 10);
+  ctx.translate(GAME.width / 2, 276);
+  ctx.textAlign = "center";
   ctx.fillStyle = "#e74c3c";
-  ctx.fillRect(16, 18, 34, 14);
+  ctx.fillRect(-17, 16, 34, 14);
   ctx.font = '8px "Press Start 2P", monospace';
   ctx.fillStyle = "#ffffff";
-  ctx.fillText("TAP", 21, 28);
+  ctx.fillText("TAP", 0, 27);
   ctx.restore();
 }
 
@@ -1056,7 +1063,7 @@ function drawGameOverCard(world) {
   ctx.fillStyle = "#5b3a17";
   ctx.font = '9px "Press Start 2P", monospace';
   ctx.fillText(`SCORE ${world.score}`, 96, 260);
-  ctx.fillText(`BEST ${appState.bestScore}`, 96, 286);
+  ctx.fillText(`BEST ${appState.playerBestScore}`, 96, 286);
   ctx.restore();
 }
 
@@ -1070,8 +1077,8 @@ function render(world) {
 
 function syncUi() {
   const world = activeWorld();
-  appState.score = world.score;
-  appState.bestScore = Math.max(appState.bestScore, world.score, trainer.bestScore);
+  appState.playerScore = playerWorld.score;
+  appState.playerBestScore = Math.max(appState.playerBestScore, playerWorld.score);
   appState.generation = trainer.generation;
   appState.reward = appState.mode === "ai" ? trainer.demoReward ?? 0 : world.reward;
   appState.entropy = Math.abs((trainer.actionConfidence ?? 0.5) - 0.5) * 2;
@@ -1079,20 +1086,24 @@ function syncUi() {
   ui.parameterLabel.textContent = `${trainer.bestNetwork.params} params`;
   ui.networkShape.textContent = trainer.bestNetwork.label;
   ui.generation.textContent = String(trainer.generation);
-  ui.score.textContent = String(world.score);
-  ui.bestScore.textContent = String(appState.bestScore);
+  ui.playerScore.textContent = String(playerWorld.score);
+  ui.aiScore.textContent = String(trainer.demoWorld.score);
+  ui.playerBestScore.textContent = String(appState.playerBestScore);
+  ui.aiBestScore.textContent = String(trainer.bestScore);
   ui.reward.textContent = appState.reward.toFixed(2);
   ui.entropy.textContent = appState.entropy.toFixed(2);
   ui.learningRate.textContent = `${trainer.populationSize} agents`;
   ui.soundToggle.textContent = sound.muted ? "Sound Off" : "Sound On";
   ui.soundToggle.setAttribute("aria-pressed", String(!sound.muted));
 
-  ui.telemetryMode.textContent = appState.mode === "ai" ? "Live training" : "Player preview";
+  ui.telemetryMode.textContent =
+    appState.mode === "ai" ? (appState.aiPaused ? "Paused" : "Live training") : "Player preview";
   ui.telemetryModel.textContent = `${trainer.bestNetwork.params} params`;
   ui.telemetryGeneration.textContent = String(trainer.generation);
   ui.telemetryRuns.textContent = String(trainer.totalRuns);
   ui.telemetryEvalAvg.textContent = trainer.evalAverage.toFixed(2);
   ui.telemetryBestAvg.textContent = trainer.bestEvalAverage.toFixed(2);
+  ui.telemetryLastScore.textContent = String(trainer.lastScore);
   ui.telemetryBestScore.textContent = String(trainer.bestScore);
   ui.telemetryWarmStart.textContent = `${Math.round(trainer.warmStartRatio * 100)}%`;
   ui.telemetryPreviewFlap.textContent = `${Math.round(trainer.previewFlap * 100)}%`;
