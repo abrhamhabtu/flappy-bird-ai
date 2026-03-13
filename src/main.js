@@ -51,6 +51,77 @@ const appState = {
   accumulator: 0,
 };
 
+class SoundEngine {
+  constructor() {
+    this.context = null;
+    this.enabled = true;
+  }
+
+  unlock() {
+    if (!this.enabled) {
+      return;
+    }
+    if (!this.context) {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) {
+        this.enabled = false;
+        return;
+      }
+      this.context = new AudioContextClass();
+    }
+    if (this.context.state === "suspended") {
+      this.context.resume();
+    }
+  }
+
+  play(type) {
+    if (!this.enabled || appState.mode !== "player" || !this.context) {
+      return;
+    }
+
+    const now = this.context.currentTime;
+    const oscillator = this.context.createOscillator();
+    const gain = this.context.createGain();
+    oscillator.connect(gain);
+    gain.connect(this.context.destination);
+
+    if (type === "flap") {
+      oscillator.type = "triangle";
+      oscillator.frequency.setValueAtTime(620, now);
+      oscillator.frequency.exponentialRampToValueAtTime(360, now + 0.08);
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(0.03, now + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.09);
+      oscillator.start(now);
+      oscillator.stop(now + 0.09);
+      return;
+    }
+
+    if (type === "score") {
+      oscillator.type = "sine";
+      oscillator.frequency.setValueAtTime(760, now);
+      oscillator.frequency.exponentialRampToValueAtTime(1080, now + 0.14);
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(0.05, now + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
+      oscillator.start(now);
+      oscillator.stop(now + 0.16);
+      return;
+    }
+
+    oscillator.type = "sawtooth";
+    oscillator.frequency.setValueAtTime(210, now);
+    oscillator.frequency.exponentialRampToValueAtTime(90, now + 0.18);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.045, now + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.2);
+    oscillator.start(now);
+    oscillator.stop(now + 0.2);
+  }
+}
+
+const sound = new SoundEngine();
+
 function hashNoise(seed, index) {
   const value = Math.sin(seed * 19.19 + index * 78.233) * 43758.5453123;
   return value - Math.floor(value);
@@ -120,21 +191,23 @@ class GameWorld {
   start() {
     if (this.phase === "ready") {
       this.phase = "running";
-      this.flap();
+      return this.flap();
     }
+    return false;
   }
 
   flap() {
     if (this.phase !== "running") {
-      return;
+      return false;
     }
     if (this.bird.flapCooldown > 0) {
-      return;
+      return false;
     }
     this.bird.vy = GAME.flapImpulse;
     this.bird.flapCooldown = 0.1;
     this.bird.wingTimer = 0;
     this.bird.wingFrame = 2;
+    return true;
   }
 
   getNextPipe() {
@@ -157,17 +230,18 @@ class GameWorld {
   step(dt) {
     this.time += dt;
     this.reward = 0;
+    let scored = false;
 
     if (this.phase === "ready") {
       this.bird.y = 230 + Math.sin(this.time * 4.6) * 6;
       this.bird.angle = Math.sin(this.time * 4.6) * 0.05;
       this.bird.wingTimer += dt;
       this.bird.wingFrame = Math.floor(this.bird.wingTimer * 8) % 3;
-      return { ended: false, reward: 0 };
+      return { ended: false, reward: 0, scored: false, crashed: false };
     }
 
     if (this.phase === "dead") {
-      return { ended: true, reward: 0 };
+      return { ended: true, reward: 0, scored: false, crashed: false };
     }
 
     this.bird.flapCooldown = Math.max(0, this.bird.flapCooldown - dt);
@@ -187,6 +261,7 @@ class GameWorld {
         pipe.passed = true;
         this.score += 1;
         this.reward += 4;
+        scored = true;
       }
     }
 
@@ -204,10 +279,10 @@ class GameWorld {
     if (this.hasCollision()) {
       this.phase = "dead";
       this.reward -= 6;
-      return { ended: true, reward: this.reward };
+      return { ended: true, reward: this.reward, scored, crashed: true };
     }
 
-    return { ended: false, reward: this.reward };
+    return { ended: false, reward: this.reward, scored, crashed: false };
   }
 
   hasCollision() {
@@ -631,7 +706,7 @@ function setMode(mode) {
   ui.overlayText.textContent =
     mode === "ai"
       ? "A reward-driven evolutionary policy trains offscreen while the current champion plays live."
-      : "Press space, click, or tap to flap. Avoid the pipes and the ground.";
+      : "Space / click / tap to flap. Stay centered, clear the pipes, and restart fast on crash.";
   playerWorld.reset(5, false);
 }
 
@@ -640,17 +715,22 @@ function activeWorld() {
 }
 
 function onPrimaryAction() {
+  sound.unlock();
   if (appState.mode === "ai") {
     return;
   }
 
   if (playerWorld.phase === "ready") {
-    playerWorld.start();
+    if (playerWorld.start()) {
+      sound.play("flap");
+    }
     return;
   }
 
   if (playerWorld.phase === "running") {
-    playerWorld.flap();
+    if (playerWorld.flap()) {
+      sound.play("flap");
+    }
     return;
   }
 
@@ -658,10 +738,12 @@ function onPrimaryAction() {
 }
 
 function updatePlayer() {
-  if (playerWorld.phase === "running") {
-    playerWorld.step(GAME.fixedDt);
-  } else {
-    playerWorld.step(GAME.fixedDt);
+  const result = playerWorld.step(GAME.fixedDt);
+  if (result.scored) {
+    sound.play("score");
+  }
+  if (result.crashed) {
+    sound.play("hit");
   }
 }
 
@@ -683,14 +765,28 @@ function drawPixelRect(x, y, w, h, fill, outline) {
 function drawBackground(world) {
   drawPixelRect(0, 0, GAME.width, GAME.height, "#70c5ce");
 
-  ctx.fillStyle = "#dff3ef";
-  for (let i = 0; i < 9; i += 1) {
-    const x = (i * 39 - (world.time * 12) % 39) | 0;
-    const heights = [20, 24, 16, 28, 18];
-    for (let j = 0; j < heights.length; j += 1) {
-      ctx.fillRect(x + j * 7, 328 - heights[j], 6, heights[j]);
+  ctx.fillStyle = "#d8f0ef";
+  for (let i = 0; i < 10; i += 1) {
+    const x = (i * 31 - (world.time * 10) % 31) | 0;
+    const skyline = [20, 34, 24, 42, 26, 30];
+    for (let j = 0; j < skyline.length; j += 1) {
+      const width = j % 2 === 0 ? 5 : 7;
+      const left = x + j * 5;
+      ctx.fillRect(left, 360 - skyline[j], width, skyline[j]);
+      if (j % 2 === 1) {
+        ctx.fillRect(left + 1, 360 - skyline[j] - 4, width - 2, 4);
+      }
     }
   }
+
+  ctx.fillStyle = "#84d85d";
+  for (let x = -18; x < GAME.width + 18; x += 18) {
+    const offset = ((world.time * 16) % 18) | 0;
+    ctx.beginPath();
+    ctx.arc(x - offset, 370, 14, Math.PI, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.fillRect(0, 370, GAME.width, 22);
 
   ctx.fillStyle = "#ded895";
   ctx.fillRect(0, GAME.height - GAME.floorHeight + 12, GAME.width, GAME.floorHeight);
