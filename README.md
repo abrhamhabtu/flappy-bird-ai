@@ -7,6 +7,8 @@ A browser-based Flappy Bird clone with two play modes:
 
 The project is intentionally lightweight: plain JavaScript, HTML, CSS, and a canvas-based game loop powered by Vite for local development.
 
+Inspired in part by an X/Twitter post from [@chatgpt21](https://x.com/chatgpt21).
+
 ## Preview
 
 This project focuses on three things:
@@ -19,7 +21,9 @@ This project focuses on three things:
 
 - Mode toggle between human play and AI play
 - Live AI stats including generation, score, reward, confidence, and parameter count
+- Dedicated AI telemetry panel with recent evaluation averages
 - Adjustable model-size slider with architecture readout
+- Sound toggle for both player mode and AI preview mode
 - Progressive difficulty curve during player runs
 - Fast local setup with no framework overhead
 
@@ -80,6 +84,12 @@ In AI mode, the project runs an evolutionary training loop:
 
 The AI is warm-started from a hand-shaped policy so it learns from a usable baseline instead of spending early generations falling immediately.
 
+### Sound
+
+The game includes lightweight browser-generated sound effects for flap, score, and crash events, plus a sound toggle so audio can be enabled or disabled at any time.
+
+This repo does not bundle ripped "original Flappy Bird" sound assets. For a public GitHub project, that is the safer choice from a licensing standpoint. If you want to swap in licensed audio later, the project is structured so that can be added cleanly.
+
 ## Model Scaling
 
 The slider changes the parameter budget of the policy network from very small models to a `1,000` parameter model.
@@ -111,7 +121,7 @@ Planned future improvements could include:
 - stronger reward shaping
 - a more advanced reinforcement-learning algorithm
 - better visual fidelity closer to the original mobile game
-- sound effects and richer UI polish
+- richer UI polish and optional licensed audio assets
 
 ## Scripts
 

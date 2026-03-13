@@ -12,21 +12,21 @@
         <div class="panel__top">
           <div>
             <p class="eyebrow">Real-time agent training</p>
-            <h1>Flappy Bird Clone</h1>
+            <h1>Flappy Bird AI</h1>
           </div>
-          <label class="mode-toggle" for="mode-switch">
-            <span>Player</span>
-            <input id="mode-switch" type="checkbox" />
-            <span class="mode-toggle__track"></span>
-            <span>AI</span>
-          </label>
+          <button id="sound-toggle" class="sound-toggle" type="button" aria-pressed="true">Sound On</button>
+        </div>
+
+        <div class="mode-buttons" role="group" aria-label="Mode selection">
+          <button id="player-mode-button" class="mode-button is-active" type="button">Play Yourself</button>
+          <button id="ai-mode-button" class="mode-button" type="button">Watch AI Learn</button>
         </div>
 
         <div class="controls-grid">
           <div class="card">
             <p class="card__label">Mode</p>
             <p id="mode-label" class="card__value">Player</p>
-            <p class="card__hint">Press space, click, or tap to flap.</p>
+            <p id="mode-hint" class="card__hint">Press space, click, or tap to flap.</p>
           </div>
 
           <div class="card">
@@ -64,17 +64,46 @@
             <strong id="entropy-stat">0.00</strong>
           </div>
           <div class="stat">
-            <span>Learning rate</span>
+            <span>Population</span>
             <strong id="lr-stat">0.012</strong>
           </div>
         </div>
       </section>
 
       <section class="game-frame">
-        <canvas id="game-canvas" width="420" height="720" aria-label="Flappy Bird canvas"></canvas>
-        <div class="overlay">
-          <p id="overlay-title">Player mode</p>
-          <p id="overlay-text">Stay in the gap. Toggle AI mode to watch the agent train live.</p>
+        <div class="game-layout">
+          <div class="viewport">
+            <canvas id="game-canvas" width="420" height="720" aria-label="Flappy Bird canvas"></canvas>
+            <div class="overlay">
+              <p id="overlay-title">Player mode</p>
+              <p id="overlay-text">Stay in the gap. Toggle AI mode to watch the agent train live.</p>
+            </div>
+          </div>
+
+          <aside class="telemetry">
+            <div class="telemetry__card">
+              <p class="telemetry__eyebrow">AI Learning Live</p>
+              <dl class="telemetry__grid">
+                <div><dt>Mode</dt><dd id="telemetry-mode">Preview</dd></div>
+                <div><dt>Model</dt><dd id="telemetry-model">64 params</dd></div>
+                <div><dt>Generation</dt><dd id="telemetry-generation">0</dd></div>
+                <div><dt>Runs</dt><dd id="telemetry-runs">0</dd></div>
+                <div><dt>Eval avg</dt><dd id="telemetry-eval-avg">0.00</dd></div>
+                <div><dt>Best avg</dt><dd id="telemetry-best-avg">0.00</dd></div>
+                <div><dt>Best score</dt><dd id="telemetry-best-score">0</dd></div>
+                <div><dt>Warm start</dt><dd id="telemetry-warm-start">70%</dd></div>
+                <div><dt>Preview flap</dt><dd id="telemetry-preview-flap">0%</dd></div>
+              </dl>
+            </div>
+
+            <div class="telemetry__card telemetry__chart-card">
+              <div class="telemetry__chart-head">
+                <p class="telemetry__eyebrow">Recent Eval Averages</p>
+                <span id="telemetry-eval-caption">Last 12 generations</span>
+              </div>
+              <canvas id="eval-chart" width="280" height="96" aria-label="Recent evaluation averages chart"></canvas>
+            </div>
+          </aside>
         </div>
       </section>
     </div>

@@ -4,8 +4,11 @@ const canvas = document.querySelector("#game-canvas");
 const ctx = canvas.getContext("2d");
 
 const ui = {
-  modeSwitch: document.querySelector("#mode-switch"),
+  playerModeButton: document.querySelector("#player-mode-button"),
+  aiModeButton: document.querySelector("#ai-mode-button"),
+  soundToggle: document.querySelector("#sound-toggle"),
   modeLabel: document.querySelector("#mode-label"),
+  modeHint: document.querySelector("#mode-hint"),
   parameterSlider: document.querySelector("#parameter-slider"),
   parameterLabel: document.querySelector("#parameter-label"),
   networkShape: document.querySelector("#network-shape"),
@@ -17,6 +20,17 @@ const ui = {
   learningRate: document.querySelector("#lr-stat"),
   overlayTitle: document.querySelector("#overlay-title"),
   overlayText: document.querySelector("#overlay-text"),
+  telemetryMode: document.querySelector("#telemetry-mode"),
+  telemetryModel: document.querySelector("#telemetry-model"),
+  telemetryGeneration: document.querySelector("#telemetry-generation"),
+  telemetryRuns: document.querySelector("#telemetry-runs"),
+  telemetryEvalAvg: document.querySelector("#telemetry-eval-avg"),
+  telemetryBestAvg: document.querySelector("#telemetry-best-avg"),
+  telemetryBestScore: document.querySelector("#telemetry-best-score"),
+  telemetryWarmStart: document.querySelector("#telemetry-warm-start"),
+  telemetryPreviewFlap: document.querySelector("#telemetry-preview-flap"),
+  telemetryEvalCaption: document.querySelector("#telemetry-eval-caption"),
+  evalChart: document.querySelector("#eval-chart"),
 };
 
 const GAME = {
@@ -55,6 +69,7 @@ class SoundEngine {
   constructor() {
     this.context = null;
     this.enabled = true;
+    this.muted = false;
   }
 
   unlock() {
@@ -75,7 +90,7 @@ class SoundEngine {
   }
 
   play(type) {
-    if (!this.enabled || appState.mode !== "player" || !this.context) {
+    if (!this.enabled || this.muted || !this.context) {
       return;
     }
 
@@ -118,9 +133,15 @@ class SoundEngine {
     oscillator.start(now);
     oscillator.stop(now + 0.2);
   }
+
+  setMuted(nextMuted) {
+    this.muted = nextMuted;
+  }
 }
 
 const sound = new SoundEngine();
+const chartCtx = ui.evalChart.getContext("2d");
+chartCtx.imageSmoothingEnabled = false;
 
 function hashNoise(seed, index) {
   const value = Math.sin(seed * 19.19 + index * 78.233) * 43758.5453123;
@@ -547,12 +568,18 @@ class EvolutionTrainer {
     this.inputSize = 6;
     this.populationSize = 36;
     this.eliteCount = 6;
+    this.warmStartRatio = 0.7;
     this.paramBudget = paramBudget;
     this.generation = 0;
     this.bestFitness = -Infinity;
     this.bestScore = 0;
     this.averageFitness = 0;
+    this.evalAverage = 0;
+    this.bestEvalAverage = 0;
+    this.totalRuns = 0;
+    this.evalHistory = [];
     this.actionConfidence = 0;
+    this.previewFlap = 0;
     this.bestNetwork = createHeuristicNetwork(this.inputSize, paramBudget);
     this.demoWorld = new GameWorld({ seed: 7, autoplay: true });
     this.simStepsPerFrame = 10;
@@ -565,7 +592,13 @@ class EvolutionTrainer {
     this.bestFitness = -Infinity;
     this.bestScore = 0;
     this.averageFitness = 0;
+    this.evalAverage = 0;
+    this.bestEvalAverage = 0;
+    this.totalRuns = 0;
+    this.evalHistory = [];
     this.actionConfidence = 0;
+    this.previewFlap = 0;
+    this.parents = null;
     this.generation = 0;
     this.bestNetwork = createHeuristicNetwork(this.inputSize, paramBudget);
     this.startGeneration();
@@ -583,7 +616,7 @@ class EvolutionTrainer {
         net:
           index === 0
             ? this.bestNetwork.clone()
-            : index < this.populationSize * 0.7
+            : index < this.populationSize * this.warmStartRatio
               ? this.bestNetwork.mutate(0.12)
               : new NeuralNet(this.inputSize, this.paramBudget),
         world: new GameWorld({ seed, autoplay: true }),
@@ -630,8 +663,17 @@ class EvolutionTrainer {
     }));
 
     const generationBest = this.population[0];
+    this.totalRuns += this.population.length;
     this.averageFitness =
       this.population.reduce((sum, agent) => sum + agent.fitness, 0) / this.population.length;
+    this.evalAverage =
+      this.population.slice(0, this.eliteCount).reduce((sum, agent) => sum + agent.world.score, 0) /
+      this.eliteCount;
+    this.bestEvalAverage = Math.max(this.bestEvalAverage, this.evalAverage);
+    this.evalHistory.push(this.evalAverage);
+    if (this.evalHistory.length > 24) {
+      this.evalHistory.shift();
+    }
     this.bestScore = Math.max(this.bestScore, generationBest.world.score);
 
     if (generationBest.fitness >= this.bestFitness) {
@@ -681,14 +723,26 @@ class EvolutionTrainer {
     const observation = this.demoWorld.getObservation();
     const flapProb = this.bestNetwork.predict(observation);
     this.actionConfidence = flapProb;
+    this.previewFlap = flapProb;
+    let flapped = false;
     if (flapProb > 0.52) {
-      this.demoWorld.flap();
+      flapped = this.demoWorld.flap();
+      if (flapped) {
+        sound.play("flap");
+      }
     }
-    const { ended, reward } = this.demoWorld.step(GAME.fixedDt);
+    const { ended, reward, scored, crashed } = this.demoWorld.step(GAME.fixedDt);
+    if (scored) {
+      sound.play("score");
+    }
+    if (crashed) {
+      sound.play("hit");
+    }
     if (ended) {
       this.resetDemo();
       this.demoReward = 0;
       this.actionConfidence = 0;
+      this.previewFlap = 0;
       return;
     }
     this.demoReward = reward;
@@ -700,8 +754,13 @@ const trainer = new EvolutionTrainer(Number(ui.parameterSlider.value));
 
 function setMode(mode) {
   appState.mode = mode;
-  ui.modeSwitch.checked = mode === "ai";
+  ui.playerModeButton.classList.toggle("is-active", mode === "player");
+  ui.aiModeButton.classList.toggle("is-active", mode === "ai");
   ui.modeLabel.textContent = mode === "ai" ? "AI" : "Player";
+  ui.modeHint.textContent =
+    mode === "ai"
+      ? "Watch the current best agent play while the trainer evolves the next generations."
+      : "Press space, click, or tap to flap.";
   ui.overlayTitle.textContent = mode === "ai" ? "AI training mode" : "Player mode";
   ui.overlayText.textContent =
     mode === "ai"
@@ -750,6 +809,47 @@ function updatePlayer() {
 function updateAi() {
   trainer.updateTraining();
   trainer.updateDemo();
+}
+
+function drawEvalChart() {
+  const { width, height } = ui.evalChart;
+  chartCtx.clearRect(0, 0, width, height);
+
+  chartCtx.fillStyle = "#142532";
+  chartCtx.fillRect(0, 0, width, height);
+
+  chartCtx.strokeStyle = "rgba(255,255,255,0.08)";
+  chartCtx.lineWidth = 1;
+  for (let i = 1; i <= 3; i += 1) {
+    const y = Math.round((height / 4) * i) + 0.5;
+    chartCtx.beginPath();
+    chartCtx.moveTo(0, y);
+    chartCtx.lineTo(width, y);
+    chartCtx.stroke();
+  }
+
+  const values = trainer.evalHistory;
+  if (values.length === 0) {
+    chartCtx.fillStyle = "#91a9b7";
+    chartCtx.font = '10px "Avenir Next", sans-serif';
+    chartCtx.fillText("Waiting for generations...", 14, 52);
+    return;
+  }
+
+  const maxValue = Math.max(...values, 1);
+  chartCtx.strokeStyle = "#f6d469";
+  chartCtx.lineWidth = 3;
+  chartCtx.beginPath();
+  values.forEach((value, index) => {
+    const x = values.length === 1 ? 14 : 14 + (index / (values.length - 1)) * (width - 28);
+    const y = height - 14 - (value / maxValue) * (height - 28);
+    if (index === 0) {
+      chartCtx.moveTo(x, y);
+    } else {
+      chartCtx.lineTo(x, y);
+    }
+  });
+  chartCtx.stroke();
 }
 
 function drawPixelRect(x, y, w, h, fill, outline) {
@@ -984,6 +1084,20 @@ function syncUi() {
   ui.reward.textContent = appState.reward.toFixed(2);
   ui.entropy.textContent = appState.entropy.toFixed(2);
   ui.learningRate.textContent = `${trainer.populationSize} agents`;
+  ui.soundToggle.textContent = sound.muted ? "Sound Off" : "Sound On";
+  ui.soundToggle.setAttribute("aria-pressed", String(!sound.muted));
+
+  ui.telemetryMode.textContent = appState.mode === "ai" ? "Live training" : "Player preview";
+  ui.telemetryModel.textContent = `${trainer.bestNetwork.params} params`;
+  ui.telemetryGeneration.textContent = String(trainer.generation);
+  ui.telemetryRuns.textContent = String(trainer.totalRuns);
+  ui.telemetryEvalAvg.textContent = trainer.evalAverage.toFixed(2);
+  ui.telemetryBestAvg.textContent = trainer.bestEvalAverage.toFixed(2);
+  ui.telemetryBestScore.textContent = String(trainer.bestScore);
+  ui.telemetryWarmStart.textContent = `${Math.round(trainer.warmStartRatio * 100)}%`;
+  ui.telemetryPreviewFlap.textContent = `${Math.round(trainer.previewFlap * 100)}%`;
+  ui.telemetryEvalCaption.textContent = `Last ${Math.max(trainer.evalHistory.length, 1)} generations`;
+  drawEvalChart();
 }
 
 function updateFrame() {
@@ -1009,8 +1123,19 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
-ui.modeSwitch.addEventListener("change", (event) => {
-  setMode(event.target.checked ? "ai" : "player");
+ui.playerModeButton.addEventListener("click", () => {
+  setMode("player");
+});
+
+ui.aiModeButton.addEventListener("click", () => {
+  sound.unlock();
+  setMode("ai");
+});
+
+ui.soundToggle.addEventListener("click", () => {
+  sound.unlock();
+  sound.setMuted(!sound.muted);
+  syncUi();
 });
 
 ui.parameterSlider.addEventListener("input", (event) => {
