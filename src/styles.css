@@ -118,10 +118,75 @@ h1 {
     0 8px 18px rgba(240, 130, 17, 0.26);
 }
 
-.controls-grid,
-.stats-grid {
+.controls-grid {
   display: grid;
   gap: 10px;
+}
+
+/* Score comparison: You vs AI side-by-side */
+.score-comparison {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.score-card {
+  background: rgba(241, 249, 255, 0.9);
+  border: 1px solid rgba(22, 50, 65, 0.08);
+  border-radius: 16px;
+  padding: 10px 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.score-card--player {
+  border-top: 3px solid #ffa538;
+}
+
+.score-card--ai {
+  border-top: 3px solid #41be84;
+}
+
+.score-card__title {
+  margin: 0;
+  font-size: 0.7rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #5c7988;
+}
+
+.score-card__body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.score-item {
+  display: grid;
+  gap: 2px;
+}
+
+.score-item span {
+  font-size: 0.7rem;
+  color: #5c7988;
+}
+
+.score-item strong {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #163241;
+}
+
+/* Compact 4-column training detail row */
+.training-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.training-stats .stat {
+  min-height: 50px;
 }
 
 .card,
@@ -181,9 +246,7 @@ input[type="range"] {
   accent-color: #ff9846;
 }
 
-.stats-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
+/* .stats-grid removed – replaced by .score-comparison + .training-stats */
 
 .stat {
   min-height: 58px;
@@ -352,8 +415,8 @@ canvas {
     border-radius: 22px;
   }
 
-  .stats-grid {
-    grid-template-columns: 1fr;
+  .training-stats {
+    grid-template-columns: repeat(2, 1fr);
   }
 
   .mode-buttons,

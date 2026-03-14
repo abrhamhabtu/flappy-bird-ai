@@ -141,6 +141,12 @@ class SoundEngine {
 const sound = new SoundEngine();
 const chartCtx = ui.evalChart.getContext("2d");
 chartCtx.imageSmoothingEnabled = false;
+const CLOUDS = [
+  { x: 6, y: 72, w: 60, h: 28 },
+  { x: 76, y: 92, w: 82, h: 36 },
+  { x: 172, y: 68, w: 64, h: 30 },
+  { x: 228, y: 94, w: 76, h: 34 },
+];
 
 function hashNoise(seed, index) {
   const value = Math.sin(seed * 19.19 + index * 78.233) * 43758.5453123;
@@ -581,6 +587,7 @@ class EvolutionTrainer {
     this.evalHistory = [];
     this.actionConfidence = 0;
     this.previewFlap = 0;
+    this.demoLastScore = 0;
     this.bestNetwork = createHeuristicNetwork(this.inputSize, paramBudget);
     this.demoWorld = new GameWorld({ seed: 7, autoplay: true });
     this.simStepsPerFrame = 10;
@@ -601,6 +608,7 @@ class EvolutionTrainer {
     this.evalHistory = [];
     this.actionConfidence = 0;
     this.previewFlap = 0;
+    this.demoLastScore = 0;
     this.parents = null;
     this.generation = 0;
     this.bestNetwork = createHeuristicNetwork(this.inputSize, paramBudget);
@@ -720,6 +728,9 @@ class EvolutionTrainer {
   }
 
   resetDemo() {
+    // Capture the score of the run that just ended before wiping the world
+    this.demoLastScore = this.demoWorld.score;
+    this.bestScore = Math.max(this.bestScore, this.demoLastScore);
     this.demoWorld.reset(this.createGenerationSeed() + 11, true);
     this.demoWorld.flap();
   }
@@ -870,25 +881,13 @@ function drawPixelRect(x, y, w, h, fill, outline) {
 function drawBackground(world) {
   drawPixelRect(0, 0, GAME.width, GAME.height, "#70c5ce");
 
-  ctx.fillStyle = "#d8f0ef";
-  for (let i = 0; i < 10; i += 1) {
-    const x = (i * 31 - (world.time * 10) % 31) | 0;
-    const skyline = [20, 34, 24, 42, 26, 30];
-    for (let j = 0; j < skyline.length; j += 1) {
-      const width = j % 2 === 0 ? 5 : 7;
-      const left = x + j * 5;
-      ctx.fillRect(left, 360 - skyline[j], width, skyline[j]);
-      if (j % 2 === 1) {
-        ctx.fillRect(left + 1, 360 - skyline[j] - 4, width - 2, 4);
-      }
-    }
-  }
+  drawCityLayer(0, 360, "#d8f0ef", "#cae6e5", 1);
+  drawCityLayer(14, 372, "#cfe9e8", "#c0dddd", 0.7);
 
   ctx.fillStyle = "#84d85d";
   for (let x = -18; x < GAME.width + 18; x += 18) {
-    const offset = ((world.time * 16) % 18) | 0;
     ctx.beginPath();
-    ctx.arc(x - offset, 370, 14, Math.PI, Math.PI * 2);
+    ctx.arc(x, 370, 14, Math.PI, Math.PI * 2);
     ctx.fill();
   }
   ctx.fillRect(0, 370, GAME.width, 22);
@@ -907,16 +906,73 @@ function drawBackground(world) {
   }
 
   ctx.fillStyle = "#f3f7de";
-  for (let i = 0; i < 4; i += 1) {
-    const baseX = (i * 90 - (world.time * 18) % 90) | 0;
-    drawCloud(baseX + 20, 86 + (i % 2) * 18);
+  for (const cloud of CLOUDS) {
+    drawCloud(cloud.x, cloud.y, cloud.w, cloud.h);
   }
 }
 
-function drawCloud(x, y) {
-  ctx.fillRect(x, y + 6, 20, 10);
-  ctx.fillRect(x + 8, y, 24, 16);
-  ctx.fillRect(x + 28, y + 5, 16, 11);
+function drawCityLayer(offsetX, baseY, bodyColor, detailColor, scale) {
+  const blocks = [
+    [0, 18, 5],
+    [8, 30, 7],
+    [19, 20, 6],
+    [29, 26, 6],
+    [39, 16, 5],
+    [47, 34, 7],
+    [58, 22, 6],
+    [68, 28, 6],
+  ];
+
+  ctx.strokeStyle = detailColor;
+  ctx.lineWidth = 1;
+
+  for (let cluster = -1; cluster < 7; cluster += 1) {
+    const clusterX = offsetX + cluster * 52;
+    for (const [x, h, w] of blocks) {
+      const left = Math.round(clusterX + x * scale);
+      const height = Math.round(h * scale);
+      const width = Math.max(4, Math.round(w * scale));
+      const top = baseY - height;
+
+      ctx.fillStyle = bodyColor;
+      ctx.fillRect(left, top, width, height);
+      if (width > 4) {
+        ctx.fillRect(left + 1, top - 3, width - 2, 3);
+      }
+      ctx.strokeRect(left + 1.5, top + 4.5, width - 3, Math.max(2, height - 8));
+
+      // Scatter small lit windows for a city-at-dusk silhouette
+      if (width >= 5 && height >= 10) {
+        ctx.fillStyle = "rgba(255,255,255,0.2)";
+        for (let wy = top + 5; wy < top + height - 3; wy += 6) {
+          for (let wx = left + 2; wx < left + width - 2; wx += 4) {
+            if (Math.abs(Math.sin(wx * 7.3 + wy * 13.7)) > 0.5) {
+              ctx.fillRect(wx, wy, 2, 2);
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+function drawCloud(x, y, w, h) {
+  ctx.save();
+  // Three overlapping circles form a classic puffy cloud silhouette
+  const r = h * 0.55;
+  ctx.beginPath();
+  ctx.arc(x + w * 0.27, y + h * 0.58, r * 0.72, 0, Math.PI * 2); // left bump
+  ctx.arc(x + w * 0.52, y + h * 0.28, r * 0.9, 0, Math.PI * 2);  // center top (tallest)
+  ctx.arc(x + w * 0.76, y + h * 0.58, r * 0.72, 0, Math.PI * 2); // right bump
+  ctx.fill();
+  // Flat rectangular base fills the gaps between circles
+  ctx.fillRect(x + w * 0.08, y + h * 0.52, w * 0.84, h * 0.5);
+  // Subtle white highlight on the top puff for a slight 3-D look
+  ctx.fillStyle = "rgba(255,255,255,0.42)";
+  ctx.beginPath();
+  ctx.arc(x + w * 0.5, y + h * 0.18, r * 0.36, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
 }
 
 function drawPipes(world) {

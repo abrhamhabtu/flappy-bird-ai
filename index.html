@@ -42,18 +42,39 @@
           </div>
         </div>
 
-        <div class="stats-grid">
+        <div class="score-comparison">
+          <div class="score-card score-card--player">
+            <p class="score-card__title">You</p>
+            <div class="score-card__body">
+              <div class="score-item">
+                <span>Score</span>
+                <strong id="player-score-stat">0</strong>
+              </div>
+              <div class="score-item">
+                <span>Best</span>
+                <strong id="player-best-score-stat">0</strong>
+              </div>
+            </div>
+          </div>
+          <div class="score-card score-card--ai">
+            <p class="score-card__title">AI</p>
+            <div class="score-card__body">
+              <div class="score-item">
+                <span>Score</span>
+                <strong id="ai-score-stat">0</strong>
+              </div>
+              <div class="score-item">
+                <span>Best</span>
+                <strong id="ai-best-score-stat">0</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="training-stats">
           <div class="stat">
             <span>Generation</span>
             <strong id="generation-stat">0</strong>
-          </div>
-          <div class="stat">
-            <span>Player score</span>
-            <strong id="player-score-stat">0</strong>
-          </div>
-          <div class="stat">
-            <span>AI live score</span>
-            <strong id="ai-score-stat">0</strong>
           </div>
           <div class="stat">
             <span>Reward</span>
@@ -66,14 +87,6 @@
           <div class="stat">
             <span>Population</span>
             <strong id="lr-stat">0.012</strong>
-          </div>
-          <div class="stat">
-            <span>Player best</span>
-            <strong id="player-best-score-stat">0</strong>
-          </div>
-          <div class="stat">
-            <span>AI best</span>
-            <strong id="ai-best-score-stat">0</strong>
           </div>
         </div>
       </section>
